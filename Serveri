@@ -1,1 +1,60 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
+#include <sys/msg.h>
+#include <string.h>
 
+#define MAX_CLIENTS 5
+#define SHARED_MEM_KEY 1234
+#define SEMAPHORE_KEY 5678
+#define MESSAGE_QUEUE_KEY 9876
+
+typedef struct {
+    int client_ids[MAX_CLIENTS];
+    int num_clients;
+} SharedData;
+
+typedef struct {
+    long mtype;
+    char mtext[256];
+} Message;
+
+int main() {
+    int shmid, semid, msqid;
+    SharedData *shared_data;
+    struct sembuf sem_operation;
+    Message message;
+
+    // Krijimi i memory shared
+    shmid = shmget(SHARED_MEM_KEY, sizeof(SharedData), IPC_CREAT | 0666);
+    if (shmid == -1) {
+        perror("shmget");
+        exit(1);
+    }
+
+    // Lidhja e shared memory
+    shared_data = (SharedData*) shmat(shmid, NULL, 0);
+    if (shared_data == (void*) -1) {
+        perror("shmat");
+        exit(1);
+    }
+
+    // Krijimi i semaforit
+    semid = semget(SEMAPHORE_KEY, 1, IPC_CREAT | 0666);
+    if (semid == -1) {
+        perror("semget");
+        exit(1);
+    }
+
+    // Inicializimi i vlerës së semaforit
+    sem_operation.sem_num = 0;
+    sem_operation.sem_op = 1;
+    sem_operation.sem_flg = 0;
+    if (semop(semid, &sem_operation, 1) == -1) {
+        perror("semop");
+        exit(1);
+    }
