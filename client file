@@ -65,5 +65,58 @@ int main() {
         perror("msgrcv");
         exit(1);
     }
+      if (strcmp(message.mtext, "LIDHUR") == 0) {
+        printf("Lidhja me serverin u realizua\n");
+    } else if (strcmp(message.mtext, "REFUZUAR") == 0) {
+        printf("Serveri refuzoi lidhjen: Numri i klientëve të lejuar është i tejkaluar\n");
+        exit(1);
+    }
+
+    while (1) {
+        printf("Shkruani një mesazh (ose 'exit' për të dalë): ");
+        fgets(input, sizeof(input), stdin);
+        input[strcspn(input, "\n")] = '\0';
+
+        strcpy(message.mtext, input);
+
+        // Merrni semaforin për të qasur në shared memory
+        sem_operation.sem_num = 0;
+        sem_operation.sem_op = -1;
+        sem_operation.sem_flg = 0;
+        if (semop(semid, &sem_operation, 1) == -1) {
+            perror("semop");
+            exit(1);
+        }
+
+        // Dërgimi i mesazhit në message queue
+        if (msgsnd(msqid, &message, sizeof(message), 0) == -1) {
+            perror("msgsnd");
+            exit(1);
+        }
+
+        // Pritni për pergjigjen nga serveri
+        if (msgrcv(msqid, &message, sizeof(message), SERVER_ID, 0) == -1) {
+            perror("msgrcv");
+            exit(1);
+        }
+
+        // Lironi semaforin pasi është përfunduar qasja në shared memory
+        sem_operation.sem_num = 0;
+        sem_operation.sem_op = 1;
+        sem_operation.sem_flg = 0;
+        if (semop(semid, &sem_operation, 1) == -1) {
+            perror("semop");
+            exit(1);
+        }
+
+        printf("Përgjigja: %s\n", message.mtext);
+
+        if (strcmp(input, "exit") == 0) {
+            break;
+        }
+    }
+
+    return 0;
+}
 
     
