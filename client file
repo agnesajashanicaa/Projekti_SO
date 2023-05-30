@@ -1,0 +1,69 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
+#include <sys/msg.h>
+#include <string.h>
+
+#define SERVER_ID 1
+#define SHARED_MEM_KEY 1234
+#define SEMAPHORE_KEY 5678
+#define MESSAGE_QUEUE_KEY 9876
+
+typedef struct {
+    long mtype;
+    char mtext[256];
+} Message;
+
+int main() {
+    int shmid, semid, msqid;
+    char input[256];
+    Message message;
+    struct sembuf sem_operation;
+
+    // Lidhja me shared memory
+    shmid = shmget(SHARED_MEM_KEY, sizeof(int), 0666);
+    if (shmid == -1) {
+        perror("shmget");
+        exit(1);
+    }
+
+    int* shared_data = (int*) shmat(shmid, NULL, 0);
+    if (shared_data == (void*) -1) {
+        perror("shmat");
+        exit(1);
+    }
+
+    // Lidhja me semaforin
+    semid = semget(SEMAPHORE_KEY, 1, 0666);
+    if (semid == -1) {
+        perror("semget");
+        exit(1);
+    }
+
+    // Lidhja me message queue
+    msqid = msgget(MESSAGE_QUEUE_KEY, 0666);
+    if (msqid == -1) {
+        perror("msgget");
+        exit(1);
+    }
+
+    message.mtype = SERVER_ID;
+    strcpy(message.mtext, "CONNECT");
+
+    // Dërgimi i mesazhit për të lidhur me serverin
+    if (msgsnd(msqid, &message, sizeof(message), 0) == -1) {
+        perror("msgsnd");
+        exit(1);
+    }
+
+    // Prisni për pergjigjen nga serveri
+    if (msgrcv(msqid, &message, sizeof(message), SERVER_ID, 0) == -1) {
+        perror("msgrcv");
+        exit(1);
+    }
+
+    
