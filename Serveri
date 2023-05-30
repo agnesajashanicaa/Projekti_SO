@@ -58,3 +58,64 @@ int main() {
         perror("semop");
         exit(1);
     }
+    
+     // Krijimi i message queue
+    msqid = msgget(MESSAGE_QUEUE_KEY, IPC_CREAT | 0666);
+    if (msqid == -1) {
+        perror("msgget");
+        exit(1);
+    }
+
+    shared_data->num_clients = 0;
+
+    while (1) {
+        // Prit mesazhet nga message queue
+        if (msgrcv(msqid, &message, sizeof(message), 1, 0) == -1) {
+            perror("msgrcv");
+            exit(1);
+        }
+
+        // Marrja e semaforit për të qasur në shared memory
+        sem_operation.sem_num = 0;
+        sem_operation.sem_op = -1;
+        sem_operation.sem_flg = 0;
+        if (semop(semid, &sem_operation, 1) == -1) {
+            perror("semop");
+            exit(1);
+        }
+
+        // Procesimi i mesazhit
+        if (strcmp(message.mtext, "CONNECT") == 0) {
+            if (shared_data->num_clients < MAX_CLIENTS) {
+                shared_data->client_ids[shared_data->num_clients] = message.mtype;
+                shared_data->num_clients++;
+                printf("Klienti %ld u lidh\n", message.mtype);
+                strcpy(message.mtext, "LIDHUR");
+            } else {
+                printf("Refuzim i klientit %ld: Numri i klientëve të lejuar është i tejkaluar\n", message.mtype);
+                strcpy(message.mtext, "REFUZUAR");
+            }
+        } else {
+            printf("Klienti %ld: %s\n", message.mtype, message.mtext);
+            strcpy(message.mtext, "PERGJIGJE");
+        }
+
+        // Dërgimi i pergjigjes në message queue
+        message.mtype = message.mtype;
+        if (msgsnd(msqid, &message, sizeof(message), 0) == -1) {
+            perror("msgsnd");
+            exit(1);
+        }
+
+        // Lirimi i semaforit pasi është përfunduar qasja në shared memory
+        sem_operation.sem_num = 0;
+        sem_operation.sem_op = 1;
+        sem_operation.sem_flg = 0;
+        if (semop(semid, &sem_operation, 1) == -1) {
+            perror("semop");
+            exit(1);
+        }
+    }
+
+    return 0;
+}
